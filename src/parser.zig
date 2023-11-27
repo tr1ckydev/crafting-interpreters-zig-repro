@@ -6,70 +6,90 @@ const std = @import("std");
 pub const Parser = struct {
     tokens: []Token.Token,
     current: usize = 0,
-    pub fn parse(self: *Parser) Expr.Expr {
-        return self.expression();
+    arena: std.mem.Allocator,
+    pub fn parse(self: *Parser) !*Expr.Expr {
+        return try self.expression();
     }
-    fn expression(self: *Parser) Expr.Expr {
+    fn expression(self: *Parser) std.mem.Allocator.Error!*Expr.Expr {
         return self.equality();
     }
-    fn equality(self: *Parser) Expr.Expr {
-        var expr = self.comparison();
+    fn equality(self: *Parser) !*Expr.Expr {
+        var expr = try self.comparison();
         while (self.match(&.{ .BANG_EQUAL, .EQUAL_EQUAL })) {
-            expr = .{ .binary = &.{
+            const e = try self.arena.create(Expr.Expr);
+            e.* = .{ .binary = .{
                 .left = expr,
                 .op = self.previous(),
-                .right = self.comparison(),
+                .right = try self.comparison(),
             } };
+            expr = e;
         }
         return expr;
     }
-    fn comparison(self: *Parser) Expr.Expr {
-        var expr = self.term();
+    fn comparison(self: *Parser) !*Expr.Expr {
+        var expr = try self.term();
         while (self.match(&.{ .GREATER, .GREATER_EQUAL, .LESS, .LESS_EQUAL })) {
-            expr = .{ .binary = &.{
+            const e = try self.arena.create(Expr.Expr);
+            e.* = .{ .binary = .{
                 .left = expr,
                 .op = self.previous(),
-                .right = self.term(),
+                .right = try self.term(),
             } };
+            expr = e;
         }
         return expr;
     }
-    fn term(self: *Parser) Expr.Expr {
-        var expr = self.factor();
+    fn term(self: *Parser) !*Expr.Expr {
+        var expr = try self.factor();
         while (self.match(&.{ .MINUS, .PLUS })) {
-            expr = .{ .binary = &.{
-                .left = expr,
+            const e = try self.arena.create(Expr.Expr);
+            e.* = .{ .binary = .{
+                .left = e,
                 .op = self.previous(),
-                .right = self.factor(),
+                .right = try self.factor(),
             } };
+            expr = e;
         }
         return expr;
     }
-    fn factor(self: *Parser) Expr.Expr {
-        var expr = self.unary();
+    fn factor(self: *Parser) !*Expr.Expr {
+        var expr = try self.unary();
         while (self.match(&.{ .SLASH, .STAR })) {
-            expr = .{ .binary = &.{
+            const e = try self.arena.create(Expr.Expr);
+            e.* = .{ .binary = .{
                 .left = expr,
                 .op = self.previous(),
-                .right = self.unary(),
+                .right = try self.unary(),
             } };
+            expr = e;
         }
         return expr;
     }
-    fn unary(self: *Parser) Expr.Expr {
+    fn unary(self: *Parser) !*Expr.Expr {
         if (self.match(&.{ .BANG, .MINUS })) {
-            return .{ .unary = &.{
+            const e = try self.arena.create(Expr.Expr);
+            e.* = .{ .unary = .{
                 .op = self.previous(),
-                .right = self.unary(),
+                .right = try self.unary(),
             } };
+            return e;
         }
         return self.primary();
     }
-    fn primary(self: *Parser) Expr.Expr {
+    fn primary(self: *Parser) !*Expr.Expr {
         if (self.match(&.{ .TRUE, .FALSE, .NIL })) {
             switch (self.previous().type) {
-                .TRUE => return .{ .literal = &.{ .value = .{ .boolean = true } } },
-                .FALSE => return .{ .literal = &.{ .value = .{ .boolean = false } } },
+                .TRUE => {
+                    const e = try self.arena.create(Expr.Expr);
+                    e.* = .{ .literal = .{ .value = .{ .boolean = true } } };
+                    return e;
+                },
+                .FALSE => {
+                    const e = try self.arena.create(Expr.Expr);
+                    e.* = .{ .literal = .{ .value = .{ .boolean = false } } };
+                    return e;
+                },
+
                 //.NIL => return Expr.Literal{ .nil = {} },
                 else => unreachable,
             }
@@ -77,19 +97,29 @@ pub const Parser = struct {
         if (self.match(&.{ .NUMBER, .STRING })) {
             switch (self.previous().type) {
                 .NUMBER => {
-                    return .{ .literal = &.{ .value = .{ .number = self.previous().literal.?.number } } };
+                    const e = try self.arena.create(Expr.Expr);
+                    e.* = .{ .literal = .{ .value = .{ .number = self.previous().literal.?.number } } };
+                    return e;
                 },
-                .STRING => return .{ .literal = &.{ .value = .{ .string = self.previous().literal.?.string } } },
+                .STRING => {
+                    const e = try self.arena.create(Expr.Expr);
+                    e.* = .{ .literal = .{ .value = .{ .string = self.previous().literal.?.string } } };
+                    return e;
+                },
                 else => unreachable,
             }
         }
         if (self.match(&.{.LEFT_PAREN})) {
-            const expr = self.expression();
+            const expr = try self.expression();
             self.consume(.RIGHT_PAREN, "expected ')' after expression");
-            return .{ .grouping = &.{ .expr = expr } };
+            const e = try self.arena.create(Expr.Expr);
+            e.* = .{ .grouping = .{ .expr = expr } };
+            return e;
         }
         self.throwError("expected expression", .{});
-        return .{ .literal = &.{ .value = .{ .number = -99999 } } };
+        const e = try self.arena.create(Expr.Expr);
+        e.* = .{ .literal = .{ .value = .{ .number = -99999 } } };
+        return e;
     }
     fn consume(self: *Parser, token_type: Token.Type, comptime message: []const u8) void {
         if (self.tokens[self.current].type == token_type) {
