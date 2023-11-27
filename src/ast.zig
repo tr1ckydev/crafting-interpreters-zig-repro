@@ -3,23 +3,23 @@ const std = @import("std");
 const Interpreter = @import("interpreter.zig").Interpreter;
 
 pub const Expr = union(enum) {
-    binary: *const Binary,
-    grouping: *const Grouping,
-    literal: *const Literal,
-    unary: *const Unary,
+    binary: Binary,
+    grouping: Grouping,
+    literal: Literal,
+    unary: Unary,
 };
 
 pub const Binary = struct {
-    left: Expr,
+    left: *Expr,
     op: Token.Token,
-    right: Expr,
+    right: *Expr,
     pub fn accept(self: *const Binary, visitor: *const Interpreter) Token.Literal {
         return visitor.*.visitBinaryExpr(Expr{ .binary = self });
     }
 };
 
 pub const Grouping = struct {
-    expr: Expr,
+    expr: *Expr,
     pub fn accept(self: *const Grouping, visitor: *const Interpreter) Token.Literal {
         return visitor.*.visitGroupingExpr(Expr{ .grouping = self });
     }
@@ -34,7 +34,7 @@ pub const Literal = struct {
 
 pub const Unary = struct {
     op: Token.Token,
-    right: Expr,
+    right: *Expr,
     pub fn accept(self: *const Unary, visitor: *const Interpreter) Token.Literal {
         return visitor.*.visitUnaryExpr(Expr{ .unary = self });
     }

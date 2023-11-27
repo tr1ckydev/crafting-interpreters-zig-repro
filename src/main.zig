@@ -6,6 +6,7 @@ const Interpreter = @import("interpreter.zig").Interpreter;
 const Parser = @import("parser.zig").Parser;
 
 pub fn main() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     while (true) {
         std.debug.print("> ", .{});
         var buffer: [100]u8 = undefined;
@@ -16,9 +17,13 @@ pub fn main() !void {
         // for (tokens) |token| {
         //     std.debug.print("{}\n", .{token});
         // }
-        var p = Parser{ .tokens = tokens };
+        var p = Parser{
+            .tokens = tokens,
+            .arena = arena.allocator(),
+        };
         const expr = p.parse();
         std.debug.print("{any}\n", .{expr});
+        _ = arena.reset(.retain_capacity);
         // var i = Interpreter{};
         // i.interpret(expr);
     }
