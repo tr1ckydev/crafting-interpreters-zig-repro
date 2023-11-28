@@ -14,24 +14,14 @@ pub fn main() !void {
         var scanner = Scanner.init(input, std.heap.page_allocator);
         defer scanner.deinit();
         const tokens = try scanner.scanTokens();
-        // for (tokens) |token| {
-        //     std.debug.print("{}\n", .{token});
-        // }
         var p = Parser{
             .tokens = tokens,
             .arena = arena.allocator(),
         };
-        const expr = p.parse();
-        std.debug.print("{any}\n", .{expr});
+        const stmts = try p.parse();
+        //std.debug.print("{any}\n", .{expr.unary.right});
         _ = arena.reset(.retain_capacity);
-        // var i = Interpreter{};
-        // i.interpret(expr);
+        var i = Interpreter{};
+        i.interpret(stmts);
     }
-    // const expr = Expr.Expr{ .binary = &.{
-    //     .left = &.{ .literal = &.{ .value = .{ .number = 10 } } },
-    //     .op = .{ .type = .MINUS, .literal = null, .line = 1, .col = 1 },
-    //     .right = &.{ .literal = &.{ .value = .{ .number = 7 } } },
-    // } };
-    // var i = Interpreter{};
-    // i.interpret(&expr);
 }

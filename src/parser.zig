@@ -2,13 +2,35 @@ const Token = @import("token.zig");
 const Expr = @import("ast.zig");
 const Chameleon = @import("chameleon").Chameleon;
 const std = @import("std");
+const Stmt = @import("stmt.zig");
 
 pub const Parser = struct {
     tokens: []Token.Token,
     current: usize = 0,
     arena: std.mem.Allocator,
-    pub fn parse(self: *Parser) !*Expr.Expr {
-        return try self.expression();
+    statements: std.ArrayList(*Stmt.Stmt) = undefined,
+    pub fn parse(self: *Parser) !*std.ArrayList(*Stmt.Stmt) {
+        self.statements = std.ArrayList(*Stmt.Stmt).init(self.arena);
+        while (!self.isAtEnd()) {
+            try self.statements.append(try self.statement());
+        }
+        return &self.statements;
+    }
+    fn statement(self: *Parser) !*Stmt.Stmt {
+        if (self.match(&.{.PRINT})) return try self.printStatement();
+        return self.expressionStatement();
+    }
+    fn printStatement(self: *Parser) !*Stmt.Stmt {
+        const value = try self.expression();
+        self.consume(.SEMICOLON, "expected ';' after statement");
+        var s = Stmt.Stmt{ .print = .{ .expr = value } };
+        return &s;
+    }
+    fn expressionStatement(self: *Parser) !*Stmt.Stmt {
+        const expr = try self.expression();
+        self.consume(.SEMICOLON, "expected ';' after statement");
+        var s = Stmt.Stmt{ .expr = .{ .expr = expr } };
+        return &s;
     }
     fn expression(self: *Parser) std.mem.Allocator.Error!*Expr.Expr {
         return self.equality();
@@ -44,7 +66,7 @@ pub const Parser = struct {
         while (self.match(&.{ .MINUS, .PLUS })) {
             const e = try self.arena.create(Expr.Expr);
             e.* = .{ .binary = .{
-                .left = e,
+                .left = expr,
                 .op = self.previous(),
                 .right = try self.factor(),
             } };
